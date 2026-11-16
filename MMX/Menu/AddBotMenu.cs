@@ -81,7 +81,7 @@ namespace MMXOnline
                         }
                     }
 
-                    for (int i = 0; i < 12; i++)
+                    for (int i = 0; i < Server.maxPlayerCap; i++)
                     {
                         if (!Global.level.players.Any(p => p.id == i))
                         {

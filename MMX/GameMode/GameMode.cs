@@ -80,6 +80,7 @@ namespace MMXOnline
         public float? startTimeLimit;
         public int playingTo;
         public bool drawingScoreboard;
+        public int scoreboardScrollY;
 
         public bool noContest;
 
@@ -746,7 +747,15 @@ namespace MMXOnline
             if (!Menu.inControlMenu && level.mainPlayer.input.isHeldMenu(Control.Scoreboard))
             {
                 drawingScoreboard = true;
+                if (Global.input.isPressedOrHeldMenu(Control.MenuUp)) scoreboardScrollY--;
+                else if (Global.input.isPressedOrHeldMenu(Control.MenuDown)) scoreboardScrollY++;
+                else if (Global.input.isPressed(SFML.Window.Keyboard.Key.PageUp)) scoreboardScrollY -= 12;
+                else if (Global.input.isPressed(SFML.Window.Keyboard.Key.PageDown)) scoreboardScrollY += 12;
                 drawScoreboard();
+            }
+            else
+            {
+                scoreboardScrollY = 0;
             }
 
             if (level.isAfkWarn())
@@ -1659,15 +1668,20 @@ namespace MMXOnline
 
         public void drawSpectators()
         {
-            var spectatorNames = level.players.Where(p => p.isSpectator).Select((p) =>
+            var specs = level.players.Where(p => p.isSpectator).ToList();
+            if (specs.Count > 0)
             {
-                bool isHost = p.serverPlayer?.isHost ?? false;
-                return p.name + (isHost ? " (Host)" : "");
-            });
-            string spectatorStr = string.Join(",", spectatorNames);
-            if (!string.IsNullOrEmpty(spectatorStr))
-            {
-                Helpers.drawTextStd(TCat.HUD, "Spectators: " + spectatorStr, 15, 200, fontSize: 20);
+                var spectatorNames = specs.Select((p) =>
+                {
+                    bool isHost = p.serverPlayer?.isHost ?? false;
+                    return p.name + (isHost ? "(H)" : "");
+                });
+                string spectatorStr = string.Join(", ", spectatorNames);
+                if (spectatorStr.Length > 34)
+                {
+                    spectatorStr = spectatorStr.Substring(0, 31) + "...";
+                }
+                Helpers.drawTextStd(TCat.HUD, string.Format("Spectators ({0}): {1}", specs.Count, spectatorStr), 15, 200, fontSize: 20);
             }
         }
 
@@ -2503,11 +2517,15 @@ namespace MMXOnline
                 players = race.getSortedPlayers();
             }
 
-            for (var i = 0; i < 12; i++)
+            const int maxRows = 12;
+            scoreboardScrollY = Helpers.clamp(scoreboardScrollY, 0, Math.Max(0, players.Count - maxRows));
+
+            for (var i = 0; i < maxRows; i++)
             {
-                if (i < players.Count)
+                int playerIndex = scoreboardScrollY + i;
+                if (playerIndex < players.Count)
                 {
-                    var player = players[i];
+                    var player = players[playerIndex];
                     var color = getCharColor(player);
                     var alpha = getCharAlpha(player);
 
@@ -2537,6 +2555,12 @@ namespace MMXOnline
                         //DrawWrappers.DrawLine(col1x, elimLineY, Global.screenW - padding - 10, elimLineY, Color.Red, 1, ZIndex.HUD, false);
                     }
                 }
+            }
+
+            if (players.Count > maxRows)
+            {
+                int endRow = Math.Min(players.Count, scoreboardScrollY + maxRows);
+                Helpers.drawTextStd(TCat.HUD, string.Format("[{0}-{1}/{2}] Up/Down: Scroll", scoreboardScrollY + 1, endRow, players.Count), Global.halfScreenW, 186, Alignment.Center, fontSize: 18);
             }
 
             drawSpectators();
@@ -2627,12 +2651,17 @@ namespace MMXOnline
 
             //this.blueScoreText.text = "Blue: " + String(blueKills);
             //this.redScoreText.text = "Red: " + String(redKills);
-            for (var i = 0; i < 12; i++)
+            const int maxRows = 11;
+            int maxTeamCount = Math.Max(bluePlayers.Count, redPlayers.Count);
+            scoreboardScrollY = Helpers.clamp(scoreboardScrollY, 0, Math.Max(0, maxTeamCount - maxRows));
+
+            for (var i = 0; i < maxRows; i++)
             {
+                int playerIndex = scoreboardScrollY + i;
                 //Blue
-                if (i < bluePlayers.Count)
+                if (playerIndex < bluePlayers.Count)
                 {
-                    var player = bluePlayers[i];
+                    var player = bluePlayers[playerIndex];
                     Color color = getCharColor(player);
                     float alpha = getCharAlpha(player);
 
@@ -2653,9 +2682,9 @@ namespace MMXOnline
                 }
 
                 //Red
-                if (i < redPlayers.Count)
+                if (playerIndex < redPlayers.Count)
                 {
-                    var player = redPlayers[i];
+                    var player = redPlayers[playerIndex];
                     var color = getCharColor(player);
                     float alpha = getCharAlpha(player);
 
@@ -2674,6 +2703,12 @@ namespace MMXOnline
                     if (Global.serverClient != null) Helpers.drawTextStd(TCat.HUDColored, player.getDisplayPing(), halfwayX + col5x, topPlayerY + (i) * 10, fontSize: 24, color: getPingColor(player), outlineColor: Helpers.DarkRed, alpha: alpha);
                     Global.sprites[getCharIcon(player)].drawToHUD(player.realCharNum, halfwayX + playerNameX - 8, -1 + topPlayerY + (i) * 10, alpha: alpha);
                 }
+            }
+
+            if (maxTeamCount > maxRows)
+            {
+                int endRow = Math.Min(maxTeamCount, scoreboardScrollY + maxRows);
+                Helpers.drawTextStd(TCat.HUD, string.Format("[{0}-{1}/{2}] Up/Down: Scroll", scoreboardScrollY + 1, endRow, maxTeamCount), Global.halfScreenW, 186, Alignment.Center, fontSize: 18);
             }
 
             drawSpectators();

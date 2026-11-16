@@ -1,27 +1,36 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DefineConstants>TRACE;WINDOWS</DefineConstants>
+  <PropertyGroup>
+    <RollForward>LatestMajor</RollForward>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseRidGraph>true</UseRidGraph>
+    <NoWarn>$(NoWarn);SYSLIB0014</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="!$(DefineConstants.Contains('WINDOWS')) AND !$(DefineConstants.Contains('LINUX')) AND !$(DefineConstants.Contains('MAC'))">
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefineConstants);TRACE;WINDOWS</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux'))">$(DefineConstants);TRACE;LINUX</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(DefineConstants);TRACE;MAC</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(DefineConstants.Contains('WINDOWS'))">
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net5.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>MMXOnline</RootNamespace>
     <ApplicationIcon>logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(DefineConstants.Contains('LINUX'))">
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>MMXOnline</RootNamespace>
     <ApplicationIcon>logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(DefineConstants.Contains('MAC'))">
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>MMXOnline</RootNamespace>
     <ApplicationIcon>logo.ico</ApplicationIcon>
   </PropertyGroup>

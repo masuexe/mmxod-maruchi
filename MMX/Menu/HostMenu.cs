@@ -17,6 +17,7 @@ namespace MMXOnline
         public string mapName;
         [JsonIgnore] public int? mapIndex;
         public int botCount = 0;
+        public int maxPlayers = 16;
         public int playTo = 20;
         public bool hidden;
         public int netcodeModel;
@@ -75,6 +76,7 @@ namespace MMXOnline
             } 
         }
         public int botCount { get { return savedMatchSettings.hostMenuSettings.botCount; } set { savedMatchSettings.hostMenuSettings.botCount = value; } }
+        public int maxPlayers { get { return savedMatchSettings.hostMenuSettings.maxPlayers; } set { savedMatchSettings.hostMenuSettings.maxPlayers = value; } }
         public int playTo { get { return savedMatchSettings.hostMenuSettings.playTo; } set { savedMatchSettings.hostMenuSettings.playTo = value; } }
         public bool hidden { get { return savedMatchSettings.hostMenuSettings.hidden; } set { savedMatchSettings.hostMenuSettings.hidden = value; } }
         public int netcodeModel { get { return savedMatchSettings.hostMenuSettings.netcodeModel; } set { savedMatchSettings.hostMenuSettings.netcodeModel = value; } }
@@ -92,6 +94,9 @@ namespace MMXOnline
         public static int prevMapSizeIndex;
         public bool playToDirty;
         public bool timeLimitDirty;
+        public bool maxPlayersDirty;
+        public int scrollOffset;
+        public const int maxVisibleOptions = 13;
 
         public string[] mapSizes = new string[] { "1v1", "Medium", "Large" };
         public string selectedMapSize
@@ -179,13 +184,15 @@ namespace MMXOnline
             
             if (inGameServer != null)
             {
-                playerCount = inGameServer.players.Count;
+                maxPlayers = Helpers.clamp(inGameServer.maxPlayers, 2, Server.maxPlayerCap);
+                playerCount = maxPlayers;
                 netcodeModel = (int)inGameServer.netcodeModel;
                 netcodeModelUnderPing = inGameServer.netcodeModelPing;
             }
             else
             {
-                playerCount = 5;
+                maxPlayers = Helpers.clamp(maxPlayers <= 0 ? 16 : maxPlayers, 2, Server.maxPlayerCap);
+                playerCount = maxPlayers;
             }
 
             foreach (var kvp in Global.levelDatas)
@@ -460,7 +467,7 @@ namespace MMXOnline
                                     playTo--;
                                     playToDirty = true;
                                 }
-                                else if (Global.input.isPressedOrHeldMenu(Control.MenuRight) && playTo < 100)
+                                else if (Global.input.isPressedOrHeldMenu(Control.MenuRight) && playTo < 300)
                                 {
                                     playTo++;
                                     playToDirty = true;
@@ -476,17 +483,52 @@ namespace MMXOnline
                     );
             }
 
+            if (!is1v1 && !isTraining)
+            {
+                // Max Players
+                menuOptions.Add(
+                    new MenuOption(startX, startY,
+                        () =>
+                        {
+                            if (Global.input.isPressedOrHeldMenu(Control.MenuLeft) && maxPlayers > 2)
+                            {
+                                maxPlayers--;
+                                maxPlayersDirty = true;
+                                if (botCount > maxPlayers - 1)
+                                {
+                                    botCount = Math.Max(0, maxPlayers - 1);
+                                    resetCpuDataTeams();
+                                }
+                                playerCount = maxPlayers;
+                                setPlayToAndTimeLimitBasedOnGameMode();
+                            }
+                            else if (Global.input.isPressedOrHeldMenu(Control.MenuRight) && maxPlayers < Server.maxPlayerCap)
+                            {
+                                maxPlayers++;
+                                maxPlayersDirty = true;
+                                playerCount = maxPlayers;
+                                setPlayToAndTimeLimitBasedOnGameMode();
+                            }
+                        },
+                        (Point pos, int index) =>
+                        {
+                            Helpers.drawTextStd(TCat.Option, "MAX PLAYERS: " + maxPlayers, pos.x, pos.y, fontSize: fontSize, selected: index == selectArrowPosY);
+                        })
+                    );
+            }
+
             // CPU Count
             menuOptions.Add(
                 new MenuOption(startX, startY,
                     () =>
                     {
+                        int maxBotCount = is1v1 ? 1 : (isTraining ? Server.maxPlayerCap - 1 : Math.Max(maxPlayers - 1, 1));
                         if (Global.input.isPressedOrHeldMenu(Control.MenuLeft) && botCount > 0)
                         {
                             botCount--;
                             resetCpuDataTeams();
                         }
-                        else if (Global.input.isPressedOrHeldMenu(Control.MenuRight) && botCount < Math.Max(selectedLevel.maxPlayers - 1, 3))
+                        else if (Global.input.isPressedOrHeldMenu(Control.MenuRight) && botCount < maxBotCount)
                         {
                             botCount++;
                             resetCpuDataTeams();
@@ -799,12 +841,17 @@ namespace MMXOnline
 
             if (inGame)
             {
-                botCount = Helpers.clamp(botCount, 0, 10 - Global.level.players.Count(p => !p.isBot));
+                int maxAllowedBots = Math.Max(0, (is1v1 ? 2 : maxPlayers) - Global.level.players.Count(p => !p.isBot));
+                botCount = Helpers.clamp(botCount, 0, maxAllowedBots);
             }
 
+            selectArrowPosY = Helpers.clamp(selectArrowPosY, 0, menuOptions.Count - 1);
             if (string.IsNullOrEmpty(errorMessage))
             {
                 Helpers.menuUpDown(ref selectArrowPosY, 0, menuOptions.Count - 1);
+                if (selectArrowPosY < scrollOffset) scrollOffset = selectArrowPosY;
+                if (selectArrowPosY >= scrollOffset + maxVisibleOptions) scrollOffset = selectArrowPosY - maxVisibleOptions + 1;
+                scrollOffset = Helpers.clamp(scrollOffset, 0, Math.Max(0, menuOptions.Count - maxVisibleOptions));
             }
 
             if (Global.input.isPressedMenu(Control.MenuSelectPrimary))
@@ -887,10 +934,11 @@ namespace MMXOnline
 
         public void completeAction()
         {
+            int targetMaxPlayers = is1v1 ? 2 : (isTraining ? Server.maxPlayerCap : maxPlayers);
             if (inGame)
             {
                 var oldServer = Global.level.server;
-                var server = new Server(oldServer.gameVersion, oldServer.region, serverName, selectedLevel.name, selectedLevel.shortName, selectedGameMode, playTo, botCount, oldServer.maxPlayers, timeLimit, fixedCamera, hidden, (NetcodeModel)netcodeModel, netcodeModelUnderPing, 
+                var server = new Server(oldServer.gameVersion, oldServer.region, serverName, selectedLevel.name, selectedLevel.shortName, selectedGameMode, playTo, botCount, targetMaxPlayers, timeLimit, fixedCamera, hidden, (NetcodeModel)netcodeModel, netcodeModelUnderPing, 
                     isLAN, mirrored, useLoadout, Global.checksum, selectedLevel.checksum, selectedLevel.customMapUrl, savedMatchSettings.extraCpuCharData, getCustomMatchSettings(), disableHtSt, disableVehicles);
                 
                 Global.leaveMatchSignal = new LeaveMatchSignal(LeaveMatchScenario.Recreate, server, null);
@@ -907,7 +955,7 @@ namespace MMXOnline
                     region = Options.main.getRegion();
                 }
 
-                var serverData = new Server(Global.version, region, serverName, selectedLevel.name, selectedLevel.shortName, selectedGameMode, playTo, botCount, 10, timeLimit, fixedCamera, hidden, (NetcodeModel)netcodeModel, netcodeModelUnderPing, isLAN, mirrored, useLoadout, 
+                var serverData = new Server(Global.version, region, serverName, selectedLevel.name, selectedLevel.shortName, selectedGameMode, playTo, botCount, targetMaxPlayers, timeLimit, fixedCamera, hidden, (NetcodeModel)netcodeModel, netcodeModelUnderPing, isLAN, mirrored, useLoadout, 
                     Global.checksum, selectedLevel.checksum, selectedLevel.customMapUrl, savedMatchSettings.extraCpuCharData, getCustomMatchSettings(), disableHtSt, disableVehicles);
                 createServer(SelectCharacterMenu.playerData.charNum, serverData, team, false, previous, out errorMessage);
             }
@@ -970,7 +1018,8 @@ namespace MMXOnline
                 gameMode = GameMode.Deathmatch;
             }
 
-            var localServer = new Server(Global.version, null, null, selectedLevel.name, selectedLevel.shortName, gameMode, playTo, botCount, selectedLevel.maxPlayers, timeLimit, fixedCamera, false, (NetcodeModel)netcodeModel, netcodeModelUnderPing, 
+            int targetMaxPlayers = is1v1 ? 2 : (isTraining ? Server.maxPlayerCap : maxPlayers);
+            var localServer = new Server(Global.version, null, null, selectedLevel.name, selectedLevel.shortName, gameMode, playTo, botCount, targetMaxPlayers, timeLimit, fixedCamera, false, (NetcodeModel)netcodeModel, netcodeModelUnderPing, 
                 isLAN, mirrored, useLoadout, Global.checksum, selectedLevel.checksum, selectedLevel.customMapUrl, savedMatchSettings.extraCpuCharData, getCustomMatchSettings(), disableHtSt, disableVehicles);
             localServer.players = new List<ServerPlayer>() { me };
 
@@ -1032,6 +1081,14 @@ namespace MMXOnline
                 fixedCamera = false;
             }
 
+            if (!maxPlayersDirty && !inGame)
+            {
+                maxPlayers = selectedLevel.is1v1() ? 2 : (selectedLevel.isMedium() ? 8 : 16);
+            }
+            playerCount = selectedLevel.is1v1() ? 2 : maxPlayers;
+            int maxBotAllowed = Math.Max(0, (selectedLevel.isTraining() ? Server.maxPlayerCap : playerCount) - 1);
+            botCount = Helpers.clamp(botCount, 0, maxBotAllowed);
+
             if (isOffline)
             {
                 if (selectedLevel.is1v1() || selectedLevel.isTraining())
@@ -1040,11 +1097,11 @@ namespace MMXOnline
                 }
                 else if (selectedLevel.isMedium())
                 {
-                    botCount = 3;
+                    botCount = Math.Min(3, maxBotAllowed);
                 }
                 else
                 {
-                    botCount = 9;
+                    botCount = Math.Min(9, maxBotAllowed);
                 }
             }
 
@@ -1095,7 +1152,9 @@ namespace MMXOnline
                     else if (playerCount == 7) playTo = 30;
                     else if (playerCount == 8) playTo = 30;
                     else if (playerCount == 9) playTo = 40;
-                    else if (playerCount >= 10) playTo = 40;
+                    else if (playerCount < 16) playTo = 40;
+                    else if (playerCount < 32) playTo = 60;
+                    else playTo = 100;
                 }
                 timeLimit = 0;
             }
@@ -1110,7 +1169,9 @@ namespace MMXOnline
                     else if (playerCount == 7) playTo = 50;
                     else if (playerCount == 8) playTo = 75;
                     else if (playerCount == 9) playTo = 75;
-                    else if (playerCount >= 10) playTo = 75;
+                    else if (playerCount < 16) playTo = 75;
+                    else if (playerCount < 32) playTo = 100;
+                    else playTo = 150;
                 }
                 timeLimit = 0;
             }
@@ -1190,7 +1251,7 @@ namespace MMXOnline
 
         public void setBotCounts()
         {
-            if (isOffline) botCount = selectedLevel.maxPlayers - 1;
+            if (isOffline) botCount = Math.Max(0, (is1v1 ? 2 : maxPlayers) - 1);
         }
 
         public bool changeTeamEnabled()
@@ -1210,15 +1271,18 @@ namespace MMXOnline
 
         public void render()
         {
+            int visibleEnd = Math.Min(menuOptions.Count, scrollOffset + maxVisibleOptions);
+            int cursorVisualIndex = selectArrowPosY - scrollOffset;
+            float cursorY = startY + cursorVisualIndex * lineH;
             if (!inGame)
             {
                 DrawWrappers.DrawTextureHUD(Global.textures["menubackground"], 0, 0);
-                DrawWrappers.DrawTextureHUD(Global.textures["cursor"], menuOptions[selectArrowPosY].pos.x - 8, menuOptions[selectArrowPosY].pos.y - 1);
+                DrawWrappers.DrawTextureHUD(Global.textures["cursor"], menuOptions[selectArrowPosY].pos.x - 8, cursorY - 1);
             }
             else
             {
                 DrawWrappers.DrawRect(5, 5, Global.screenW - 5, Global.screenH - 5, true, Helpers.MenuBgColor, 0, ZIndex.HUD + 200, false);
-                Global.sprites["cursor"].drawToHUD(0, menuOptions[selectArrowPosY].pos.x - 8, menuOptions[selectArrowPosY].pos.y + 5);
+                Global.sprites["cursor"].drawToHUD(0, menuOptions[selectArrowPosY].pos.x - 8, cursorY + 5);
             }
 
             string titleText = "";
@@ -1239,10 +1303,22 @@ namespace MMXOnline
 
             Helpers.drawTextStd(TCat.Title, titleText, Global.halfScreenW, 20, alignment: Alignment.Center, vAlignment: VAlignment.Center, fontSize: 48);
 
-            int i = 0;
-            foreach (var menuOption in menuOptions)
+            for (int i = scrollOffset; i < visibleEnd; i++)
             {
-                menuOption.render(menuOption.pos, i++);
+                Point renderPos = new Point(menuOptions[i].pos.x, startY + (i - scrollOffset) * lineH);
+                menuOptions[i].render(renderPos, i);
+            }
+
+            if (menuOptions.Count > maxVisibleOptions)
+            {
+                if (scrollOffset > 0)
+                {
+                    Helpers.drawTextStd(TCat.BotHelp, "^", startX - 8, startY - 8, Alignment.Left, fontSize: 18);
+                }
+                if (visibleEnd < menuOptions.Count)
+                {
+                    Helpers.drawTextStd(TCat.BotHelp, "v", startX - 8, startY + maxVisibleOptions * lineH - 2, Alignment.Left, fontSize: 18);
+                }
             }
 
             string msg;

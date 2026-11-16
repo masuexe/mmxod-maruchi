@@ -1081,12 +1081,18 @@ namespace MMXOnline
 
         public static string getNthString(int place)
         {
-            string placeStr = "";
-            if (place == 1) placeStr = "1st";
-            else if (place == 2) placeStr = "2nd";
-            else if (place == 3) placeStr = "3rd";
-            else placeStr = place.ToString() + "th";
-            return placeStr;
+            int mod100 = place % 100;
+            if (mod100 >= 11 && mod100 <= 13)
+            {
+                return place.ToString() + "th";
+            }
+            switch (place % 10)
+            {
+                case 1: return place.ToString() + "st";
+                case 2: return place.ToString() + "nd";
+                case 3: return place.ToString() + "rd";
+                default: return place.ToString() + "th";
+            }
         }
 
         public static SoundBufferWrapper getRandomMatchingVoice(Dictionary<string, SoundBufferWrapper> buffers, string soundKey, int charNum)

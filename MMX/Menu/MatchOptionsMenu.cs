@@ -484,7 +484,8 @@ namespace MMXOnline
 
         private bool canAddBot()
         {
-            return Global.isHost && Global.level.players.Count < Global.level.levelData.maxPlayers && !Global.level.isElimination();
+            int cap = Global.level.server?.maxPlayers ?? Global.level.levelData.maxPlayers;
+            return Global.isHost && Global.level.players.Count(p => !p.isSpectator) < cap && !Global.level.isElimination();
         }
 
         private bool canSpectate()

@@ -73,14 +73,15 @@ namespace MMXOnline
         }
 
         public const byte sendStringRPCByte = (byte)0;
-        public const int maxOverflowSpectatorCount = 2;
+        public const int maxOverflowSpectatorCount = 8;
         public const int maxRejoinCount = 3;
         public const float connectionTimeoutSeconds = 15;
 
         public const byte getServersQueryByte = 0;
         public const byte getServerQueryByte = 1;
 
-        public const int maxPlayerCap = 10;
+        public const int maxPlayerCap = 64;
+        public const int netBufferSize = 1048576;
 
         [JsonIgnore]
         public ServerPlayer host { get; set; }
@@ -105,7 +106,7 @@ namespace MMXOnline
             this.gameMode = gameMode;
             this.playTo = playTo;
             this.botCount = botCount;
-            this.maxPlayers = Helpers.clamp(maxPlayers, 10, maxPlayerCap);
+            this.maxPlayers = Helpers.clamp(maxPlayers, 2, maxPlayerCap);
             this.timeLimit = (timeLimit == 0 ? null : (int?)timeLimit);
             this.fixedCamera = fixedCamera;
             this.hidden = hidden;
@@ -368,6 +369,8 @@ namespace MMXOnline
                 Helpers.debugLog("Starting server " + name + " on port " + port);
                 NetPeerConfiguration config = new NetPeerConfiguration(name);
                 config.MaximumConnections = maxPlayers + maxOverflowSpectatorCount;
+                config.ReceiveBufferSize = netBufferSize;
+                config.SendBufferSize = netBufferSize;
                 config.Port = port;
                 config.AutoFlushSendQueue = false;
                 config.ConnectionTimeout = connectionTimeoutSeconds;
@@ -571,7 +574,7 @@ namespace MMXOnline
                 // Something really wrong happened here...
                 else
                 {
-                    im.SenderConnection.Disconnect("Could not join, over 12 players.");
+                    im.SenderConnection.Disconnect($"Could not join, over {maxPlayers + maxOverflowSpectatorCount} players.");
                     return;
                 }
             }
@@ -597,9 +600,9 @@ namespace MMXOnline
 
             if (playerContract.isHost && players.Count(p => p.isBot) == 0)
             {
-                for (int i = 0; i < botCount && players.Count < 10; i++)
+                for (int i = 0; i < botCount && players.Count(p => !p.isSpectator) < maxPlayers; i++)
                 {
-                    var cpuData = extraCpuCharData.cpuDatas.ElementAtOrDefault(i);
+                    var cpuData = extraCpuCharData?.cpuDatas?.ElementAtOrDefault(i);
                     int? overrideCharNum = null;
                     if (cpuData != null && !cpuData.isRandom) overrideCharNum = cpuData?.charNum;
                     int? overrideAlliance = GameMode.isStringTeamMode(gameMode) && cpuData?.alliance >= 0 ? cpuData?.alliance : null;
@@ -787,7 +790,7 @@ namespace MMXOnline
             }
             else if (rpcTemplate is RPCAddBot)
             {
-                if (players.Count < 10)
+                if (players.Count(p => !p.isSpectator) < maxPlayers)
                 {
                     ushort argCount = BitConverter.ToUInt16(im.ReadBytes(2), 0);
                     var bytes = im.ReadBytes((int)argCount);

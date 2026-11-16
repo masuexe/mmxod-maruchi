@@ -32,8 +32,10 @@ namespace MMXOnline
             int lives = playingTo - level.mainPlayer.deaths;
             Helpers.drawTextStd(TCat.HUD, "Lives: " + lives.ToString(), 5, 5, Alignment.Left, fontSize: (uint)32);
             Helpers.drawTextStd(TCat.HUD, "Alive: ", 5, 15, Alignment.Left, fontSize: (uint)32);
-            Helpers.drawTextStd(TCat.HUDColored, (redPlayersStillAlive.Count).ToString(), 62, 15, Alignment.Left, fontSize: (uint)32, outlineColor: Helpers.DarkRed);
-            Helpers.drawTextStd(TCat.HUDColored, "/" + (bluePlayersStillAlive.Count).ToString(), 70, 15, Alignment.Left, fontSize: (uint)32, outlineColor: Helpers.DarkBlue);
+            string redStr = redPlayersStillAlive.Count.ToString();
+            Helpers.drawTextStd(TCat.HUDColored, redStr, 62, 15, Alignment.Left, fontSize: (uint)32, outlineColor: Helpers.DarkRed);
+            float redWidth = Helpers.measureTextStd(TCat.HUDColored, redStr, fontSize: 32u).x;
+            Helpers.drawTextStd(TCat.HUDColored, "/" + (bluePlayersStillAlive.Count).ToString(), 62 + redWidth + 1, 15, Alignment.Left, fontSize: (uint)32, outlineColor: Helpers.DarkBlue);
 
             if (virusStarted != 1)
             {

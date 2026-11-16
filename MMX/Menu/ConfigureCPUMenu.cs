@@ -24,6 +24,8 @@ namespace MMXOnline
         public IMainMenu prevMenu;
         public List<MenuOption> menuOptions = new List<MenuOption>();
         public int selectArrowPosY;
+        public int scrollOffset;
+        public const int maxVisibleOptions = 15;
         public const int startX = 30;
         public int startY = 30;
         public const int lineH = 10;
@@ -49,10 +51,6 @@ namespace MMXOnline
             this.isHost = isHost;
 
             int currentY = startY;
-            if (cpuCount >= 9 && isTeamMode)
-            {
-                currentY -= 10;
-            }
 
             SavedMatchSettings savedMatchSettings = isOffline ? SavedMatchSettings.mainOffline : SavedMatchSettings.mainOnline;
 
@@ -69,7 +67,7 @@ namespace MMXOnline
             charSelections = new List<CharSelection>(charSelections);
             charSelections.Insert(0, new CharSelection("Random", 0, 1, 0, "", 0));
 
-            for (int i = 0; i < Math.Min(savedMatchSettings.extraCpuCharData.cpuDatas.Count, 9); i++)
+            for (int i = 0; i < savedMatchSettings.extraCpuCharData.cpuDatas.Count; i++)
             {
                 var cpuData = savedMatchSettings.extraCpuCharData.cpuDatas[i];
                 cpuData.uiSelectedCharIndex = Helpers.clamp(cpuData.uiSelectedCharIndex, 0, charSelections.Count - 1);
@@ -117,9 +115,14 @@ namespace MMXOnline
 
         public void update()
         {
-            Helpers.menuUpDown(ref selectArrowPosY, 0, menuOptions.Count - 1);
-
-            menuOptions[selectArrowPosY].update();
+            if (menuOptions.Count > 0)
+            {
+                Helpers.menuUpDown(ref selectArrowPosY, 0, menuOptions.Count - 1);
+                if (selectArrowPosY < scrollOffset) scrollOffset = selectArrowPosY;
+                if (selectArrowPosY >= scrollOffset + maxVisibleOptions) scrollOffset = selectArrowPosY - maxVisibleOptions + 1;
+                scrollOffset = Helpers.clamp(scrollOffset, 0, Math.Max(0, menuOptions.Count - maxVisibleOptions));
+                menuOptions[selectArrowPosY].update();
+            }
 
             if (Global.input.isPressedMenu(Control.MenuBack))
             {
@@ -140,13 +143,23 @@ namespace MMXOnline
             }
             
             Helpers.drawTextStd(TCat.Title, "Configure CPU players", Global.halfScreenW, 7, fontSize: 48, alignment: Alignment.Center);
-            DrawWrappers.DrawTextureHUD(Global.textures["cursor"], menuOptions[0].pos.x - 10, menuOptions[(int)selectArrowPosY].pos.y - 1);
 
-            int i = 0;
-            foreach (var menuOption in menuOptions)
+            if (menuOptions.Count > 0)
             {
-                menuOption.render(menuOption.pos, i);
-                i++;
+                int visibleEnd = Math.Min(menuOptions.Count, scrollOffset + maxVisibleOptions);
+                float cursorY = startY + lineH + (selectArrowPosY - scrollOffset) * lineH;
+                DrawWrappers.DrawTextureHUD(Global.textures["cursor"], menuOptions[0].pos.x - 10, cursorY - 1);
+
+                for (int i = scrollOffset; i < visibleEnd; i++)
+                {
+                    Point renderPos = new Point(menuOptions[i].pos.x, startY + lineH + (i - scrollOffset) * lineH);
+                    menuOptions[i].render(renderPos, i);
+                }
+
+                if (menuOptions.Count > maxVisibleOptions)
+                {
+                    Helpers.drawTextStd(TCat.BotHelp, string.Format("[{0}-{1}/{2}] Up/Down: Scroll", scrollOffset + 1, visibleEnd, menuOptions.Count), Global.screenW * 0.5f, 198, Alignment.Center, fontSize: 18);
+                }
             }
 
             Helpers.drawTextStd(TCat.BotHelp, "Left/Right: Change, [Z]: Back", Global.screenW * 0.5f, 210, Alignment.Center, fontSize: 24);

@@ -21,6 +21,8 @@ namespace MMXOnline
         public const int maxAutoRefreshCount = 2;
         public float recreateWaitTime;
         public int selCursorY;
+        public int scrollOffset;
+        public const int maxVisibleRows = 11;
 
         public WaitMenu(IMainMenu prevMenu, Server server, bool isRecreate)
         {
@@ -80,7 +82,7 @@ namespace MMXOnline
 
             if (server.players.Count > 10) rowHeight2 = 10;
             else rowHeight2 = 12;
-            selCursorY = Helpers.clamp(selCursorY, 0, server.players.Count - 1);
+            selCursorY = Helpers.clamp(selCursorY, 0, Math.Max(0, server.players.Count - 1));
 
             if (Global.serverClient.isHost)
             {
@@ -126,7 +128,12 @@ namespace MMXOnline
                     }));
                 }
 
-                Helpers.menuUpDown(ref selCursorY, 0, server.players.Count - 1);
+                if (server.players.Count > 0)
+                {
+                    Helpers.menuUpDown(ref selCursorY, 0, server.players.Count - 1);
+                    if (selCursorY < scrollOffset) scrollOffset = selCursorY;
+                    if (selCursorY >= scrollOffset + maxVisibleRows) scrollOffset = selCursorY - maxVisibleRows + 1;
+                }
 
                 bool isLeft = Global.input.isPressedMenu(Control.MenuLeft);
                 bool isRight = Global.input.isPressedMenu(Control.MenuRight);
@@ -182,6 +189,11 @@ namespace MMXOnline
             }
             else
             {
+                if (server.players.Count > maxVisibleRows)
+                {
+                    if (Global.input.isPressedOrHeldMenu(Control.MenuUp)) scrollOffset--;
+                    else if (Global.input.isPressedOrHeldMenu(Control.MenuDown)) scrollOffset++;
+                }
                 if (Global.input.isPressedMenu(Control.MenuBack))
                 {
                     Global.serverClient.disconnect("Client disconnected before starting.");
@@ -190,6 +202,8 @@ namespace MMXOnline
                     Menu.change(new JoinMenu(false));
                 }
             }
+
+            scrollOffset = Helpers.clamp(scrollOffset, 0, Math.Max(0, server.players.Count - maxVisibleRows));
 
             autoRefreshTime += Global.spf;
             if (Global.input.isPressedMenu(Control.MenuSelectSecondary) || (autoRefreshTime > autoRefreshInterval && autoRefreshCount < maxAutoRefreshCount))
@@ -238,6 +252,7 @@ namespace MMXOnline
                 Helpers.drawTextStd("Match IP: " + server.ip, col1Pos, headerPos - 13, outline: false, fontSize: 24);
                 Helpers.drawTextStd("Map: " + server.getMapDisplayName(), col1Pos, headerPos - 6, outline: false, fontSize: 24);
             }
+            Helpers.drawTextStd("Players: " + server.players.Count(p => !p.isSpectator) + "/" + server.maxPlayers, Global.screenW - 25, headerPos - 20, Alignment.Right, outline: false, fontSize: 24);
 
             Helpers.drawTextStd(TCat.Title, "Player", col1Pos, headerPos, outline: false);
             Helpers.drawTextStd(TCat.Title, "Id", col2Pos, headerPos, outline: false);
@@ -246,14 +261,16 @@ namespace MMXOnline
             else Helpers.drawTextStd(TCat.Title, "Spec?", col4Pos, headerPos, outline: false);
 
             var startServerRow = rowHeight + headerPos - 2;
+            int endRow = Math.Min(server.players.Count, scrollOffset + maxVisibleRows);
 
-            if (Global.serverClient.isHost)
+            if (Global.serverClient.isHost && server.players.Count > 0 && selCursorY >= scrollOffset && selCursorY < endRow)
             {
-                DrawWrappers.DrawTextureHUD(Global.textures["cursor"], 26, startServerRow - 1 + (selCursorY * rowHeight2));
+                DrawWrappers.DrawTextureHUD(Global.textures["cursor"], 26, startServerRow - 1 + ((selCursorY - scrollOffset) * rowHeight2));
             }
 
-            for (int i = 0; i < server.players.Count; i++)
+            for (int i = scrollOffset; i < endRow; i++)
             {
+                int rowIndex = i - scrollOffset;
                 var player = server.players[i];
                 var color = Color.White;
                 if (player.id == Global.serverClient.serverPlayer.id)
@@ -261,19 +278,24 @@ namespace MMXOnline
                     color = Color.Green;
                 }
 
-                Helpers.drawTextStd(player.name, col1Pos, startServerRow + (i * rowHeight2), outline: false, fontSize: 24, color: color);
-                Helpers.drawTextStd(player.id.ToString(), col2Pos, startServerRow + (i * rowHeight2), outline: false, fontSize: 24, color: color);
-                Helpers.drawTextStd(player.isHost ? "yes" : "no", col3Pos, startServerRow + (i * rowHeight2), outline: false, fontSize: 24, color: color);
+                Helpers.drawTextStd(player.name, col1Pos, startServerRow + (rowIndex * rowHeight2), outline: false, fontSize: 24, color: color);
+                Helpers.drawTextStd(player.id.ToString(), col2Pos, startServerRow + (rowIndex * rowHeight2), outline: false, fontSize: 24, color: color);
+                Helpers.drawTextStd(player.isHost ? "yes" : "no", col3Pos, startServerRow + (rowIndex * rowHeight2), outline: false, fontSize: 24, color: color);
                 if (isTeamMode())
                 {
                     string team = player.alliance == GameMode.redAlliance ? "red" : "blue";
                     if (player.isSpectator) team = "spec";
-                    Helpers.drawTextStd(team, col4Pos, startServerRow + (i * rowHeight2), outline: false, fontSize: 24, color: color);
+                    Helpers.drawTextStd(team, col4Pos, startServerRow + (rowIndex * rowHeight2), outline: false, fontSize: 24, color: color);
                 }
                 else
                 {
-                    Helpers.drawTextStd(player.isSpectator ? "yes" : "no", col4Pos, startServerRow + (i * rowHeight2), outline: false, fontSize: 24, color: color);
+                    Helpers.drawTextStd(player.isSpectator ? "yes" : "no", col4Pos, startServerRow + (rowIndex * rowHeight2), outline: false, fontSize: 24, color: color);
                 }
+            }
+
+            if (server.players.Count > maxVisibleRows)
+            {
+                Helpers.drawTextStd(string.Format("[{0}-{1}/{2}] Up/Down: Scroll", scrollOffset + 1, endRow, server.players.Count), Global.halfScreenW, 198, Alignment.Center, outline: false, fontSize: 18);
             }
 
             if (!Global.serverClient.isHost)

@@ -2440,6 +2440,12 @@ namespace MMXOnline
                 return (!gameMode.useTeamSpawns() && spawnPoint.alliance == -1) || (gameMode.useTeamSpawns() && spawnPoint.alliance == player.newAlliance);
             }).ToList();
 
+            if (availableSpawns.Count == 0)
+            {
+                availableSpawns = spawnPoints;
+            }
+            if (availableSpawns.Count == 0) return null;
+
             if (isFirstTime)
             {
                 return availableSpawns[player.getSpawnIndex(availableSpawns.Count)];
@@ -2450,7 +2456,54 @@ namespace MMXOnline
                 return !spawnPoint.occupied();
             }).ToList();
 
-            return unoccupied.GetRandomItem();
+            if (unoccupied.Count > 0)
+            {
+                return unoccupied.GetRandomItem();
+            }
+
+            var occupiedPositions = players
+                .Where(p => p != player && p.character != null && p.alliance != player.newAlliance)
+                .Select(p => p.character.pos)
+                .ToList();
+            if (occupiedPositions.Count == 0)
+            {
+                occupiedPositions = players
+                    .Where(p => p != player && p.character != null)
+                    .Select(p => p.character.pos)
+                    .ToList();
+            }
+
+            return getLeastCrowdedSpawnPoint(availableSpawns, occupiedPositions);
+        }
+
+        public static SpawnPoint getLeastCrowdedSpawnPoint(List<SpawnPoint> availableSpawns, List<Point> occupiedPositions)
+        {
+            if (availableSpawns == null || availableSpawns.Count == 0) return null;
+            if (occupiedPositions == null || occupiedPositions.Count == 0) return availableSpawns.GetRandomItem();
+
+            float bestMinDist = -1f;
+            var bestSpawns = new List<SpawnPoint>();
+            foreach (var sp in availableSpawns)
+            {
+                float minDist = float.MaxValue;
+                foreach (var pos in occupiedPositions)
+                {
+                    float dist = sp.pos.distanceTo(pos);
+                    if (dist < minDist) minDist = dist;
+                }
+                if (minDist > bestMinDist + 0.01f)
+                {
+                    bestMinDist = minDist;
+                    bestSpawns.Clear();
+                    bestSpawns.Add(sp);
+                }
+                else if (MathF.Abs(minDist - bestMinDist) <= 0.01f)
+                {
+                    bestSpawns.Add(sp);
+                }
+            }
+
+            return bestSpawns.GetRandomItem();
         }
 
         public bool isRace()

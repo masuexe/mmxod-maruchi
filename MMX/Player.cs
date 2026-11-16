@@ -700,12 +700,12 @@ namespace MMXOnline
             return charNum + (maverick1v1 ?? -1) + 1;
         }
 
-        public const int netIdsPerPlayer = 5000;
+        public const int netIdsPerPlayer = 800;
 
         // The first net id this player could possibly own. This includes the "reserved" ones
         public ushort getStartNetId()
         {
-            return (ushort)(Level.maxReservedNetId + (ushort)(id * netIdsPerPlayer));
+            return (ushort)(Level.maxReservedNetId + (id * netIdsPerPlayer));
         }
 
         // The character net id is always the first net id of the player
@@ -750,11 +750,16 @@ namespace MMXOnline
             }
 
             var retId = curMaxNetId;
-            curMaxNetId++;
+            int nextId = curMaxNetId + 1;
+            int maxIdForPlayer = getStartNetId() + netIdsPerPlayer;
 
-            if (curMaxNetId >= getStartNetId() + netIdsPerPlayer)
+            if (nextId >= maxIdForPlayer || nextId > ushort.MaxValue)
             {
                 curMaxNetId = getFirstAvailableNetId();
+            }
+            else
+            {
+                curMaxNetId = (ushort)nextId;
             }
 
             return retId;

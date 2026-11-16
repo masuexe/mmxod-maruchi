@@ -48,6 +48,8 @@ namespace MMXOnline
             config.EnableMessageType(NetIncomingMessageType.ConnectionLatencyUpdated);
             config.AutoFlushSendQueue = false;
             config.ConnectionTimeout = Server.connectionTimeoutSeconds;
+            config.ReceiveBufferSize = Server.netBufferSize;
+            config.SendBufferSize = Server.netBufferSize;
 #if DEBUG
             config.SimulatedMinimumLatency = Global.simulatedLatency;
             config.SimulatedLoss = Global.simulatedPacketLoss;
